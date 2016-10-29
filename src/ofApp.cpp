@@ -127,56 +127,59 @@ void ofApp::draw(){
   ofSetHexColor(0xffffff);
 
 
-  int width  = 320;
-  int height = 240;
+  int width  = 640;
+  int height = 360;
+  int pad    = 20;
   int time = ofGetElapsedTimeMillis() - startTime;
   
 
-  grayImage.draw(20,20,width,height);
-  grayBg.draw(360,20,width,height);
-  grayDiff.draw(20,280,width,height);
-  // then draw the contours:
-  ofFill();
-  ofSetHexColor(0x333333);
-  ofDrawRectangle(360,280,width,height);
-  ofSetHexColor(0xffffff);
+  grayImage.draw(pad,pad,width,height);
+  ofDrawBitmapString(string("grayscale image"), pad,pad );
+  grayBg.draw(pad+width+pad,pad,width,height);
+  ofDrawBitmapString(string("background image"), pad+width+pad,pad );
+  grayDiff.draw(pad,pad+height+pad,width,height);
+  ofDrawBitmapString(string("subtracted image"), pad,pad+height+pad );
+  contourFinder.draw(pad,pad+height+pad,width,height);
 
-  // draw the whole contour finder
-  contourFinder.draw(360,280,width,height);
-
-  // finally, a report:
+  // displaye status information
   ofSetHexColor(0xffffff);
   stringstream reportStr;
 
   reportStr << "status:" << endl
-            << "   time (ms): "          << time                 << endl
-            << "   grab interval (ms): " << grabInterval         << endl
-            << "   log interval (ms): "  << logInterval          << endl
-            << "   threshold: "          << threshold            << endl
-            << "   num blobs found: "    << contourFinder.nBlobs << endl
-            << "   fps: " << ofGetFrameRate() << " @ " << WIDTH << "x" << HEIGHT << endl
-            << "   output to ";
+            << "   time (ms): "                  << time                 << endl
+            << "   grab interval (ms): "         << grabInterval         << endl
+            << "   log interval (ms): "          << logInterval          << endl
+            << "   threshold: "                  << threshold            << endl
+            << "   blob area min/max (pixels):"  << minBlobArea << "/" << maxBlobArea << endl
+            << "   num blobs found: "            << contourFinder.nBlobs << endl
+            << "   source: ";
+
+  #ifdef _USE_LIVE_VIDEO
+  reportStr << vidGrabber.getWidth() << "x" << vidGrabber.getHeight();
+  #else
+  reportStr << vidPlayer.getWidth() << "x" << vidPlayer.getHeight();
+  #endif
+  reportStr << " @ " << ofGetFrameRate() << " fps" << endl;
+  reportStr << "   output to: ";
   if( *out == cout )
     reportStr << "console" << endl;
   else
     reportStr << "file (" << logfn << ")" << endl;
-    ofDrawBitmapString(reportStr.str(), 20, 600);
-  reportStr.str(string());
-
   reportStr << "commands:" << endl
               << "   ' ' (spacebar) to capture background image" << endl
-              << "   '+' increase threshold for blob detection" << endl
-              << "   '-' decrease threshold for blob detection" << endl
-              << "   '.' increase log interval by 1 ms"         << endl
-              << "   ',' decrease log interval by 1 ms"         << endl
-              << "   '>' increase log interval by 1 s"          << endl
-              << "   '<' decrease log interval by 1 s"          << endl
-              << "   'f' send log data to file"                 << endl
-              << "   'c' send log data to console"              << endl;
+              << "   '+/-' increase/decrease threshold for blob detection" << endl
+              << "   './,' increase/decrease log interval by 1 ms"         << endl
+              << "   '>/<' increase/decrease log interval by 1 s"          << endl
+              << "   'f/c' send log data to file/console"                  << endl
+              << "   's/a' increase/decrease max blob area by 1 pixel"     << endl
+              << "   'x/z' increase/decrease min blob area by 1 pixel"     << endl
+              << "   'S/A' increase/decrease max blob area by 1000 pixels" << endl
+              << "   'X/Z' increase/decrease min blob area by 1000 pixels" << endl
+              ;
 
+            
+  ofDrawBitmapString(reportStr.str(), pad+width+pad, pad+height+pad);
 
-
-  ofDrawBitmapString(reportStr.str(), 360, 600);
 
 
 }
@@ -215,7 +218,37 @@ void ofApp::keyPressed(int key){
     case 'r':
       startTime = ofGetElapsedTimeMillis();
       break;
+
+
+    case 'a':
+      maxBlobArea -= 1;
+      break;
+    case 's':
+      maxBlobArea += 1;
+      break;
+    case 'z':
+      minBlobArea -= 1;
+      break;
+    case 'x':
+      minBlobArea += 1;
+      break;
+
+    case 'A':
+      maxBlobArea -= 1000;
+      break;
+    case 'S':
+      maxBlobArea += 1000;
+      break;
+    case 'Z':
+      minBlobArea -= 1000;
+      break;
+    case 'X':
+      minBlobArea += 1000;
+      break;
+
   }
+  if (maxBlobArea < minBlobArea) maxBlobArea = minBlobArea;
+  if (minBlobArea < 0) minBlobArea = 0;
 }
 
 //--------------------------------------------------------------
