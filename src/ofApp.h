@@ -49,9 +49,11 @@ class ofApp : public ofBaseApp{
     int         minBlobArea;
     int         maxBlobArea;
     int         maxBlobs;
+    int         totalBlobArea;
     ostream*    out;
     ofstream    fout;
     string      logfn;
+
 
 
 };

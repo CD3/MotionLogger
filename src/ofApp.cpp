@@ -98,6 +98,9 @@ void ofApp::update(){
 
     // find contours
     contourFinder.findContours(grayDiff, minBlobArea, maxBlobArea, maxBlobs, true);  // find holes
+    totalBlobArea = 0;
+    for (int i = 0; i < contourFinder.nBlobs; i++)
+      totalBlobArea += contourFinder.blobs[i].area;
 
     // log data
     if( logInterval > -1 && time - lastLogTime - logInterval > 0 )
@@ -108,6 +111,7 @@ void ofApp::update(){
              << contourFinder.blobs[i].boundingRect.getCenter().x
              << " "
              << contourFinder.blobs[i].boundingRect.getCenter().y;
+        totalBlobArea += contourFinder.blobs[i].area;
       }
       *out << endl;
       lastLogTime = time;
@@ -147,7 +151,7 @@ void ofApp::draw(){
             << "   log interval (ms): "          << logInterval          << endl
             << "   threshold: "                  << threshold            << endl
             << "   blob area min/max (pixels):"  << minBlobArea << "/" << maxBlobArea << endl
-            << "   num blobs found: "            << contourFinder.nBlobs << endl
+            << "   num blobs/total blob area: "  << contourFinder.nBlobs << "/" << totalBlobArea << endl
             << "   source: " << vidSource.getWidth() << "x" << vidSource.getHeight() << " @ " << ofGetFrameRate() << " fps" << endl
             << "   output to: "
             ;
