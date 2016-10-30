@@ -4,8 +4,6 @@
 
 #include "ofxOpenCv.h"
 
-#define _USE_LIVE_VIDEO    // uncomment this to use a live camera
-                // otherwise, we'll use a movie file
 
 class ofApp : public ofBaseApp{
 
@@ -26,10 +24,10 @@ class ofApp : public ofBaseApp{
     void dragEvent(ofDragInfo dragInfo);
     void gotMessage(ofMessage msg);    
 
-        #ifdef _USE_LIVE_VIDEO
-      ofVideoGrabber     vidGrabber;
+    #ifdef _USE_LIVE_VIDEO
+      ofVideoGrabber    vidSource;
     #else
-      ofVideoPlayer     vidPlayer;
+      ofVideoPlayer     vidSource;
     #endif
 
     ofxCvColorImage      colorImg;
@@ -46,7 +44,7 @@ class ofApp : public ofBaseApp{
     uint64_t    startTime;    // time 0 for logged data
     int         grabInterval; // in milliseconds
     int         logInterval;  // in milliseconds
-    uint64_t    lastGrabTime; // milliseconds
+    uint64_t    lastFrameTime; // milliseconds
     uint64_t    lastLogTime;  // milliseconds
     int         minBlobArea;
     int         maxBlobArea;

@@ -15,30 +15,35 @@
 #define MAXBLOBAREA (1280*720/3);
 // maximum number of blobs to search for
 #define MAXBLOBS 1
+//#define _USE_LIVE_VIDEO    // uncomment this to use a live camera
+                           // otherwise, we'll use a movie file
 
 //--------------------------------------------------------------
 void ofApp::setup(){
 
+  int width,height;
   #ifdef _USE_LIVE_VIDEO
-        vidGrabber.setVerbose(true);
-        vidGrabber.setup(WIDTH,HEIGHT);
+  vidSource.setVerbose(true);
+  vidSource.setup(WIDTH,HEIGHT);
   #else
-        vidPlayer.load("fingers.mov");
-        vidPlayer.play();
-        vidPlayer.setLoopState(OF_LOOP_NORMAL);
+  vidSource.load("input.mov");
+  vidSource.play();
+  vidSource.setLoopState(OF_LOOP_NORMAL);
   #endif
+  width  = vidSource.getWidth();
+  height = vidSource.getHeight();
 
-  colorImg.allocate(WIDTH,HEIGHT);
-  grayImage.allocate(WIDTH,HEIGHT);
-  grayBg.allocate(WIDTH,HEIGHT);
-  grayDiff.allocate(WIDTH,HEIGHT);
+  colorImg.allocate(width,height);
+  grayImage.allocate(width,height);
+  grayBg.allocate(width,height);
+  grayDiff.allocate(width,height);
 
   bLearnBakground = true;
   threshold = 80;
 
   grabInterval = 0;
   logInterval = -1;
-  lastGrabTime = 0;
+  lastFrameTime = 0;
   lastLogTime = 0;
 
   minBlobArea = MINBLOBAREA;
@@ -70,27 +75,18 @@ void ofApp::update(){
   ofBackground(100,100,100);
   bool bNewFrame = false;
 
-  #ifdef _USE_LIVE_VIDEO
-  if( grabInterval > -1 && time - lastGrabTime - grabInterval > 0 )
+  if( grabInterval > -1 && time - lastFrameTime - grabInterval > 0 )
   {
-    vidGrabber.update();
-    bNewFrame = vidGrabber.isFrameNew();
-    lastGrabTime = time;
+    vidSource.update();
+    bNewFrame = vidSource.isFrameNew();
+    lastFrameTime = time;
   }
-  #else
-  vidPlayer.update();
-  bNewFrame = vidPlayer.isFrameNew();
-  #endif
 
   if (bNewFrame){
 
-    #ifdef _USE_LIVE_VIDEO
-            colorImg.setFromPixels(vidGrabber.getPixels());
-      #else
-            colorImg.setFromPixels(vidPlayer.getPixels());
-        #endif
+    colorImg.setFromPixels(vidSource.getPixels());
 
-        grayImage = colorImg;
+    grayImage = colorImg;
     if (bLearnBakground == true){
       grayBg = grayImage;    // the = sign copys the pixels from grayImage into grayBg (operator overloading)
       bLearnBakground = false;
@@ -152,30 +148,24 @@ void ofApp::draw(){
             << "   threshold: "                  << threshold            << endl
             << "   blob area min/max (pixels):"  << minBlobArea << "/" << maxBlobArea << endl
             << "   num blobs found: "            << contourFinder.nBlobs << endl
-            << "   source: ";
-
-  #ifdef _USE_LIVE_VIDEO
-  reportStr << vidGrabber.getWidth() << "x" << vidGrabber.getHeight();
-  #else
-  reportStr << vidPlayer.getWidth() << "x" << vidPlayer.getHeight();
-  #endif
-  reportStr << " @ " << ofGetFrameRate() << " fps" << endl;
-  reportStr << "   output to: ";
+            << "   source: " << vidSource.getWidth() << "x" << vidSource.getHeight() << " @ " << ofGetFrameRate() << " fps" << endl
+            << "   output to: "
+            ;
   if( *out == cout )
     reportStr << "console" << endl;
   else
     reportStr << "file (" << logfn << ")" << endl;
   reportStr << "commands:" << endl
-              << "   ' ' (spacebar) to capture background image" << endl
-              << "   '+/-' increase/decrease threshold for blob detection" << endl
-              << "   './,' increase/decrease log interval by 1 ms"         << endl
-              << "   '>/<' increase/decrease log interval by 1 s"          << endl
-              << "   'f/c' send log data to file/console"                  << endl
-              << "   's/a' increase/decrease max blob area by 1 pixel"     << endl
-              << "   'x/z' increase/decrease min blob area by 1 pixel"     << endl
-              << "   'S/A' increase/decrease max blob area by 1000 pixels" << endl
-              << "   'X/Z' increase/decrease min blob area by 1000 pixels" << endl
-              ;
+            << "   ' ' (spacebar) to capture background image" << endl
+            << "   '+/-' increase/decrease threshold for blob detection" << endl
+            << "   './,' increase/decrease log interval by 1 ms"         << endl
+            << "   '>/<' increase/decrease log interval by 1 s"          << endl
+            << "   'f/c' send log data to file/console"                  << endl
+            << "   's/a' increase/decrease max blob area by 1 pixel"     << endl
+            << "   'x/z' increase/decrease min blob area by 1 pixel"     << endl
+            << "   'S/A' increase/decrease max blob area by 1000 pixels" << endl
+            << "   'X/Z' increase/decrease min blob area by 1000 pixels" << endl
+            ;
 
             
   ofDrawBitmapString(reportStr.str(), pad+width+pad, pad+height+pad);
