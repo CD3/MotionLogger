@@ -15,8 +15,6 @@
 #define MAXBLOBAREA (1280*720/3);
 // maximum number of blobs to search for
 #define MAXBLOBS 1
-//#define _USE_LIVE_VIDEO    // uncomment this to use a live camera
-                           // otherwise, we'll use a movie file
 
 //--------------------------------------------------------------
 void ofApp::setup(){
@@ -155,7 +153,7 @@ void ofApp::draw(){
             << "   source: " << vidSource.getWidth() << "x" << vidSource.getHeight() << " @ " << ofGetFrameRate() << " fps" << endl
             << "   output to: "
             ;
-  if( *out == cout )
+  if( out == &cout )
     reportStr << "console" << endl;
   else
     reportStr << "file (" << logfn << ")" << endl;
