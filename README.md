@@ -4,13 +4,19 @@ MotionLogger is a simple OpenFrameworks application that can track and log the p
 
 ## Building
 
-This repository is an OpenFrameworks project. To build the application, you need to have OpenFrameworks installed. Then place this directory in the myApps directory of the OpenFrameworks installation (usually
-at of_vx.x.x_msys2_release/apps/myApps/MotionLogger. If you don't put this directory in the myApps directory, then you will have to edit the `Makefile` to point OF_ROOT at the OpenFrameworks install. 
+This repository is an OpenFrameworks project that can be built with `make`, so
+it should work on Linux, Mac, and Windows with msys2. The easiest way to build
+the proejct is to simply clone this repository into the `myApps` directory of
+your OpenFrameworks directory and run `make`. If you are using msys2 on Windows, you
+ned to install git first:
 
-To build, just run make.
-
+    > pacman --sync git # run this if you are using msys2 on Windows
+    > cd path/to/of_release_directory
+    > cd apps/myApps
+    > git clone https://github.com/CD3/MotionLogger.git
+    > cd MotionLogger
     > make
-
+    
 This will create an executable name `MotionLogger` in the `bin/` directory. To run the application, run this executable
 
     > ./bin/MotionLogger
