@@ -187,6 +187,10 @@ void ofApp::keyPressed(int key){
       threshold ++;
       if (threshold > 255) threshold = 255;
       break;
+    case '-':
+      threshold --;
+      if (threshold < 0) threshold = 0;
+      break;
     case '.':
       logInterval++;
       break;
