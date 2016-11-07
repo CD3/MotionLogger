@@ -11,8 +11,9 @@
 // min and max blob size area.
 // this can be used to limit the range of sizes
 // that the software will consider for an object.
-#define MINBLOBAREA 20;
-#define MAXBLOBAREA (1920*1080/3);
+#define THRESHOLD 50
+#define MINBLOBAREA 9;
+#define MAXBLOBAREA (1920*1080/100);
 // maximum number of blobs to search for
 #define MAXBLOBS 1
 
@@ -37,7 +38,7 @@ void ofApp::setup(){
   grayDiff.allocate(width,height);
 
   bLearnBakground = true;
-  threshold = 80;
+  threshold = THRESHOLD;
 
   grabInterval = 0;
   logInterval = -1;
