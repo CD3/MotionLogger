@@ -1,5 +1,4 @@
 data-*.txt
 obj/
-bin/MotionLogger
-bin/libs/
+bin/
 .*.swp
