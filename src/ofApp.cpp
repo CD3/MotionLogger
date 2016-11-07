@@ -3,8 +3,8 @@
 // configuration
 
 // size of image grabbed from web cam
-#define WIDTH 1280
-#define HEIGHT 720
+#define WIDTH 1920
+#define HEIGHT 1080
 // string that will be prefixed to log file.
 // resulting filename will be prefix-timestamp.txt
 #define LOGFILEPREFIX "data"
@@ -12,7 +12,7 @@
 // this can be used to limit the range of sizes
 // that the software will consider for an object.
 #define MINBLOBAREA 20;
-#define MAXBLOBAREA (1280*720/3);
+#define MAXBLOBAREA (1920*1080/3);
 // maximum number of blobs to search for
 #define MAXBLOBS 1
 
@@ -73,7 +73,7 @@ void ofApp::update(){
   ofBackground(100,100,100);
   bool bNewFrame = false;
 
-  if( grabInterval > -1 && time - lastFrameTime - grabInterval > 0 )
+  if( grabInterval > -1 && time - lastFrameTime > grabInterval )
   {
     vidSource.update();
     bNewFrame = vidSource.isFrameNew();
@@ -101,14 +101,16 @@ void ofApp::update(){
       totalBlobArea += contourFinder.blobs[i].area;
 
     // log data
-    if( logInterval > -1 && time - lastLogTime - logInterval > 0 )
+    if( logInterval > -1 && time - lastLogTime > logInterval )
     {
       *out << time - startTime;
       for (int i = 0; i < contourFinder.nBlobs; i++){
         *out << " "
              << contourFinder.blobs[i].boundingRect.getCenter().x
              << " "
-             << contourFinder.blobs[i].boundingRect.getCenter().y;
+             << contourFinder.blobs[i].boundingRect.getCenter().y
+             << " "
+             << contourFinder.blobs[i].area;
         totalBlobArea += contourFinder.blobs[i].area;
       }
       *out << endl;
