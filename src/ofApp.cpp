@@ -2,10 +2,10 @@
 
 
 // configuration settings
-void ofApp::loadSettings()
+void ofApp::loadSettings(string fn)
 {
   // try to load settings from a file
-  if(!settings.loadFile( "settings.xml"))
+  if(!settings.loadFile(fn))
     cout << "Settings could not be loaded from file." << endl;
   else
     cout << "Loaded settings from file." << endl;
@@ -16,6 +16,7 @@ void ofApp::loadSettings()
   SETSETTING( "webcam_width",  (int)1920             ); // the webcamera resolution
   SETSETTING( "webcam_height", (int)1080             );
   SETSETTING( "logfileprefix", (string)"data"        ); // prefix for log file
+  SETSETTING( "loginterval",   (int)-1               ); // log interval
   SETSETTING( "maxblobs",      (int)1                ); // maximum number of blobs to identify
   SETSETTING( "minblobarea",   (int)9                ); // min and max areas to consider for a blob
   SETSETTING( "maxblobarea",   (int)(1920*1080)/100  );
@@ -29,11 +30,19 @@ void ofApp::loadSettings()
 #undef SETSETTING
 
 
+  // cached settings
+  threshold     = settings.getValue("threshold",0);
+  minBlobArea   = settings.getValue("minblobarea",0);
+  maxBlobArea   = settings.getValue("maxblobarea",0);
+  maxBlobs      = settings.getValue("maxblobs",0);
+  logInterval   = settings.getValue("loginterval",-1);
+
+
 }
 
-void ofApp::saveSettings()
+void ofApp::saveSettings(string fn)
 {
-  settings.saveFile("settings.xml");
+  settings.saveFile(fn);
 }
 
 //--------------------------------------------------------------
@@ -41,21 +50,24 @@ void ofApp::setup(){
 
   
   // saved/default settings
+  settings_fn = "settings.xml";
   
-  loadSettings();
+  loadSettings(settings_fn);
 
-  // live settings
+  // derived settings
 
-  threshold   = settings.getValue("threshold",0);
-  minBlobArea = settings.getValue("minblobarea",0);
-  maxBlobArea = settings.getValue("maxblobarea",0);
-  maxBlobs    = settings.getValue("maxblobs",0);
+  lastLogTime   = 0;
+  grabInterval  = 0;
+  lastFrameTime = 0;
 
 
   int width,height;
   #ifdef _USE_LIVE_VIDEO
   vidSource.setVerbose(true);
   vidSource.setup(settings.getValue("webcam_width",0),settings.getValue("webcam_height",0));
+  // put the actual width and height back in the settings
+  settings.setValue( "webcam_width", vidSource.getWidth() );
+  settings.setValue( "webcam_height", vidSource.getHeight() );
   #else
   vidSource.load("input.mov");
   vidSource.play();
@@ -71,10 +83,6 @@ void ofApp::setup(){
 
   bLearnBakground = true;
 
-  grabInterval = 0;
-  logInterval = -1;
-  lastFrameTime = 0;
-  lastLogTime = 0;
 
 
   stringstream ss;
@@ -190,14 +198,16 @@ void ofApp::draw(){
     reportStr << "file (" << logfn << ")" << endl;
   reportStr << "commands:" << endl
             << "   ' ' (spacebar) to capture background image" << endl
-            << "   '+/-' increase/decrease threshold for blob detection" << endl
-            << "   './,' increase/decrease log interval by 1 ms"         << endl
-            << "   '>/<' increase/decrease log interval by 1 s"          << endl
-            << "   'f/c' send log data to file/console"                  << endl
-            << "   's/a' increase/decrease max blob area by 1 pixel"     << endl
-            << "   'x/z' increase/decrease min blob area by 1 pixel"     << endl
-            << "   'S/A' increase/decrease max blob area by 1000 pixels" << endl
-            << "   'X/Z' increase/decrease min blob area by 1000 pixels" << endl
+            << "   '+/-' increase/decrease threshold for blob detection"  << endl
+            << "   './,' increase/decrease log interval by 1 ms"          << endl
+            << "   '>/<' increase/decrease log interval by 1 s"           << endl
+            << "   'f/c' send log data to file/console"                   << endl
+            << "   ']/[' increase/decrease max blob area by 1 pixel"      << endl
+            << "   ''/;' increase/decrease min blob area by 1 pixel"      << endl
+            << "   '}/{' increase/decrease max blob area by 1000 pixels"   << endl
+            << "   '\"/:' increase/decrease min blob area by 1000 pixels"  << endl
+            << "   's'   save settings to a file                      "  << endl
+            << "   'd'   delete settings file                          "  << endl
             ;
 
             
@@ -245,30 +255,42 @@ void ofApp::keyPressed(int key){
       break;
 
 
-    case 'a':
+    case '[':
       maxBlobArea -= 1;
       break;
-    case 's':
+    case ']':
       maxBlobArea += 1;
       break;
-    case 'z':
-      minBlobArea -= 1;
-      break;
-    case 'x':
-      minBlobArea += 1;
-      break;
-
-    case 'A':
+    case '{':
       maxBlobArea -= 1000;
       break;
-    case 'S':
+    case '}':
       maxBlobArea += 1000;
       break;
-    case 'Z':
+
+
+
+    case ';':
+      minBlobArea -= 1;
+      break;
+    case '\'':
+      minBlobArea += 1;
+      break;
+   case ':':
       minBlobArea -= 1000;
       break;
-    case 'X':
+    case '"':
       minBlobArea += 1000;
+      break;
+
+    case 's':
+      saveSettings(settings_fn);
+      break;
+    case 'd':
+      ofFile::removeFile(settings_fn);
+      break;
+    case 'l':
+      loadSettings(settings_fn);
       break;
 
   }
@@ -276,6 +298,14 @@ void ofApp::keyPressed(int key){
   if (logInterval < -1) logInterval = -1;
   if (maxBlobArea < minBlobArea) maxBlobArea = minBlobArea;
   if (minBlobArea < 0) minBlobArea = 0;
+
+  // we need to put updated settings into the settings object in case the user want to write
+  // them to file later.
+  settings.setValue( "maxblobs",    (int)maxBlobs );
+  settings.setValue( "maxblobarea", (int)maxBlobArea );
+  settings.setValue( "minblobarea", (int)minBlobArea );
+  settings.setValue( "threshold",   (int)threshold );
+  settings.setValue( "loginterval", (int)logInterval );
 }
 
 //--------------------------------------------------------------

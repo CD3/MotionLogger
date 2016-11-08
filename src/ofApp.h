@@ -51,8 +51,9 @@ class ofApp : public ofBaseApp{
 
     // configuration
     ofxXmlSettings settings;
-    void loadSettings();
-    void saveSettings();
+    void loadSettings(string fn);
+    void saveSettings(string fn);
+    string settings_fn;
 
     // cached config vars
     size_t      webcam_width;  // width of webcam image (in pixels)
