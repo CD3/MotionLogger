@@ -3,9 +3,10 @@
 #include "ofMain.h"
 
 #include "ofxOpenCv.h"
+#include "ofxXmlSettings.h"
 
 #define _USE_LIVE_VIDEO    // uncomment this to use a live camera
-                           // otherwise, we'll use a movie file
+                           // otherwise, application exects a file named 'input.mov' to be in the data directory.
 
 
 class ofApp : public ofBaseApp{
@@ -41,23 +42,31 @@ class ofApp : public ofBaseApp{
 
     ofxCvContourFinder   contourFinder;
 
-    int         threshold;
     bool        bLearnBakground;
 
-    uint64_t    startTime;    // time 0 for logged data
-    int         grabInterval; // in milliseconds
-    int         logInterval;  // in milliseconds
-    uint64_t    lastFrameTime; // milliseconds
-    uint64_t    lastLogTime;  // milliseconds
-    int         minBlobArea;
-    int         maxBlobArea;
-    int         maxBlobs;
-    int         totalBlobArea;
+    size_t      totalBlobArea;
     ostream*    out;
     ofstream    fout;
     string      logfn;
 
+    // configuration
+    ofxXmlSettings settings;
+    void loadSettings();
+    void saveSettings();
 
+    // cached config vars
+    size_t      webcam_width;  // width of webcam image (in pixels)
+    size_t      webcam_height; // height of webcam image (in pixels)
+    size_t      threshold;
+    uint64_t    startTime;     // time 0 for logged data
+    uint64_t    lastFrameTime; // milliseconds
+    uint64_t    lastLogTime;   // milliseconds
+    int64_t     grabInterval;  // in milliseconds
+    int64_t     logInterval;   // in milliseconds
+
+    size_t      minBlobArea;
+    size_t      maxBlobArea;
+    size_t      maxBlobs;
 
 };
 

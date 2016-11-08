@@ -1,29 +1,61 @@
 #include "ofApp.h"
 
-// configuration
 
-// size of image grabbed from web cam
-#define WIDTH 1920
-#define HEIGHT 1080
-// string that will be prefixed to log file.
-// resulting filename will be prefix-timestamp.txt
-#define LOGFILEPREFIX "data"
-// min and max blob size area.
-// this can be used to limit the range of sizes
-// that the software will consider for an object.
-#define THRESHOLD 50
-#define MINBLOBAREA 9;
-#define MAXBLOBAREA (1920*1080/100);
-// maximum number of blobs to search for
-#define MAXBLOBS 1
+// configuration settings
+void ofApp::loadSettings()
+{
+  // try to load settings from a file
+  if(!settings.loadFile( "settings.xml"))
+    cout << "Settings could not be loaded from file." << endl;
+  else
+    cout << "Loaded settings from file." << endl;
+
+  #define SETSETTING(name,default) settings.setValue( name, settings.getValue( name, default ) );
+
+  // set defaults for any missing settings
+  SETSETTING( "webcam_width",  (int)1920             ); // the webcamera resolution
+  SETSETTING( "webcam_height", (int)1080             );
+  SETSETTING( "logfileprefix", (string)"data"        ); // prefix for log file
+  SETSETTING( "maxblobs",      (int)1                ); // maximum number of blobs to identify
+  SETSETTING( "minblobarea",   (int)9                ); // min and max areas to consider for a blob
+  SETSETTING( "maxblobarea",   (int)(1920*1080)/100  );
+  SETSETTING( "threshold",     (int)50               ); // image contrast used for blob detection in gray background diff image
+
+  string tmp;
+  settings.copyXmlToString( tmp );
+  cout << "Settings:" << endl;
+  cout << tmp << endl;
+
+#undef SETSETTING
+
+
+}
+
+void ofApp::saveSettings()
+{
+  settings.saveFile("settings.xml");
+}
 
 //--------------------------------------------------------------
 void ofApp::setup(){
 
+  
+  // saved/default settings
+  
+  loadSettings();
+
+  // live settings
+
+  threshold   = settings.getValue("threshold",0);
+  minBlobArea = settings.getValue("minblobarea",0);
+  maxBlobArea = settings.getValue("maxblobarea",0);
+  maxBlobs    = settings.getValue("maxblobs",0);
+
+
   int width,height;
   #ifdef _USE_LIVE_VIDEO
   vidSource.setVerbose(true);
-  vidSource.setup(WIDTH,HEIGHT);
+  vidSource.setup(settings.getValue("webcam_width",0),settings.getValue("webcam_height",0));
   #else
   vidSource.load("input.mov");
   vidSource.play();
@@ -38,19 +70,15 @@ void ofApp::setup(){
   grayDiff.allocate(width,height);
 
   bLearnBakground = true;
-  threshold = THRESHOLD;
 
   grabInterval = 0;
   logInterval = -1;
   lastFrameTime = 0;
   lastLogTime = 0;
 
-  minBlobArea = MINBLOBAREA;
-  maxBlobArea = MAXBLOBAREA;
-  maxBlobs    = MAXBLOBS;
 
   stringstream ss;
-  ss << LOGFILEPREFIX << "-";
+  ss << settings.getValue("logfileprefix","_")<< "-";
   ss << ofGetYear();
   ss << ofGetMonth();
   ss << ofGetDay();
@@ -59,7 +87,7 @@ void ofApp::setup(){
   ss << ".txt";
   logfn = ss.str();
   fout.open(logfn);
-  fout << "# time(ms) x(pixel) y(pixel) .. repeated for each blob\n";
+  fout << "# time(ms) x(pixel) y(pixel) blob_area(pixels).. repeated for each blob\n";
 
   out = &cout;
 
@@ -187,26 +215,24 @@ void ofApp::keyPressed(int key){
       bLearnBakground = true;
       break;
     case '+':
-      threshold ++;
-      if (threshold > 255) threshold = 255;
+      if(threshold < 255)
+        threshold ++;
       break;
     case '-':
-      threshold --;
-      if (threshold < 0) threshold = 0;
+      if(threshold > 0)
+        threshold --;
       break;
     case '.':
       logInterval++;
       break;
     case ',':
       logInterval--;
-      if (logInterval < -1) logInterval = -1;
       break;
     case '>':
       logInterval += 1000;
       break;
     case '<':
       logInterval -= 1000;
-      if (logInterval < -1) logInterval = -1;
       break;
     case 'f':
       out = &fout;
@@ -246,6 +272,8 @@ void ofApp::keyPressed(int key){
       break;
 
   }
+
+  if (logInterval < -1) logInterval = -1;
   if (maxBlobArea < minBlobArea) maxBlobArea = minBlobArea;
   if (minBlobArea < 0) minBlobArea = 0;
 }
