@@ -100,19 +100,25 @@ void ofApp::setup(){
   out = &cout;
 
   startTime = 0;
+  ofBackground(100,100,100);
 
 }
 
 //--------------------------------------------------------------
 void ofApp::update(){
-  int time = ofGetElapsedTimeMillis();
     
-  ofBackground(100,100,100);
   bool bNewFrame = false;
 
+  uint64_t time,stime,etime;
+  stime = etime = 0;
+  time = ofGetElapsedTimeMillis();
   if( grabInterval > -1 && time - lastFrameTime > grabInterval )
   {
+    stime = ofGetElapsedTimeMillis();
     vidSource.update();
+    etime = ofGetElapsedTimeMillis();
+    time = (stime+etime)/2;
+    // use the average time at which the image was aquired.
     bNewFrame = vidSource.isFrameNew();
     lastFrameTime = time;
   }
