@@ -13,6 +13,7 @@ void ofApp::loadSettings(string fn)
   #define SETSETTING(name,default) settings.setValue( name, settings.getValue( name, default ) );
 
   // set defaults for any missing settings
+  SETSETTING( "webcam_id",     (int)0                ); // the webcamera to use
   SETSETTING( "webcam_width",  (int)1920             ); // the webcamera resolution
   SETSETTING( "webcam_height", (int)1080             );
   SETSETTING( "logfileprefix", (string)"data"        ); // prefix for log file
@@ -64,6 +65,7 @@ void ofApp::setup(){
   int width,height;
   #ifdef _USE_LIVE_VIDEO
   vidSource.setVerbose(true);
+  vidSource.setDeviceID( settings.getValue("webcam_id", 0) );
   vidSource.setup(settings.getValue("webcam_width",0),settings.getValue("webcam_height",0));
   // put the actual width and height back in the settings
   settings.setValue( "webcam_width", vidSource.getWidth() );
