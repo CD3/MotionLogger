@@ -4,39 +4,68 @@
 // configuration settings
 void ofApp::loadSettings(string fn)
 {
+  ofxXmlSettings savedSettings;
   // try to load settings from a file
-  if(!settings.loadFile(fn))
+  if(!savedSettings.loadFile(fn))
     ofLog( OF_LOG_NOTICE ) << "Settings could not be loaded from file." << endl;
   else
     ofLog( OF_LOG_NOTICE ) << "Loaded settings from file." << endl;
 
-  #define SETSETTING(name,default) settings.setValue( name, settings.getValue( name, default ) );
+  // setting migrations
+  // when you want to change a setting name, just add an entry here to convert
+  // the old setting name to the new setting name.
+  _migrate(savedSettings, "webcam.id", "webcam_id");
+  _migrate(savedSettings, "webcam.width", "webcam_width");
+  _migrate(savedSettings, "webcam.height", "webcam_height");
+  _migrate(savedSettings, "logging.file.prefix", "logfileprefix");
+  _migrate(savedSettings, "logging.interval", "loginterval");
+  _migrate(savedSettings, "blobs.num", "maxblobs");
+  _migrate(savedSettings, "blobs.minarea", "minblobarea");
+  _migrate(savedSettings, "blobs.maxarea", "maxblobarea");
+  _migrate(savedSettings, "blobs.threshold", "threshold");
+
+  if(migrated)
+  {
+    ofLog( OF_LOG_WARNING ) << "Your current settings file an old version." << endl
+                            << "Future versions of this app *should* continue to support this version" << endl
+                            << "(" << migrated << " settings were automatically updated)" << endl
+                            << "but it is recommended that you update to the latest version by saving"  << endl
+                            << "a new settings file."  << endl;
+  }
+
+
+
+#define SET(name,default) \
+  if( _has( savedSettings, name ) ) \
+    set( name, _get<string>( savedSettings, name ), false ); \
+  else \
+    set( name, default ); \
 
   // set defaults for any missing settings
-  SETSETTING( "webcam_id",     (int)0                ); // the webcamera to use
-  SETSETTING( "webcam_width",  (int)1920             ); // the webcamera resolution
-  SETSETTING( "webcam_height", (int)1080             );
-  SETSETTING( "logfileprefix", (string)"data"        ); // prefix for log file
-  SETSETTING( "loginterval",   (int)-1               ); // log interval
-  SETSETTING( "maxblobs",      (int)1                ); // maximum number of blobs to identify
-  SETSETTING( "minblobarea",   (int)9                ); // min and max areas to consider for a blob
-  SETSETTING( "maxblobarea",   (int)(1920*1080)/100  );
-  SETSETTING( "threshold",     (int)50               ); // image contrast used for blob detection in gray background diff image
+  SET( "webcam.id"           , (int)0               ); // the webcamera to use
+  SET( "webcam.width"        , (int)1000            ); // the webcamera resolution
+  SET( "webcam.height"       , (int)1080            );
+  SET( "logging.file.prefix" , (string)"data"       ); // prefix for log file
+  SET( "logging.interval"    , (int)-1              ); // log interval
+  SET( "blobs.num"           , (int)1               ); // maximum number of blobs to identify
+  SET( "blobs.minarea"       , (int)9               ); // min and max areas to consider for a blob
+  SET( "blobs.maxarea"       , (int)(1920*1080)/100 );
+  SET( "blobs.threshold"     , (int)50              ); // image contrast used for blob detection in gray background diff image
 
   string tmp;
   settings.copyXmlToString( tmp );
   ofLog( OF_LOG_NOTICE ) << "Settings:" << endl;
   ofLog( OF_LOG_NOTICE ) << tmp << endl;
 
-#undef SETSETTING
+#undef SET
 
 
   // cached settings
-  threshold     = settings.getValue("threshold",0);
-  blobs_minarea   = settings.getValue("minblobarea",0);
-  blobs_maxarea   = settings.getValue("maxblobarea",0);
-  blobs_num      = settings.getValue("maxblobs",0);
-  logInterval   = settings.getValue("loginterval",-1);
+  threshold     = get<int>("blobs.threshold");
+  blobs_minarea = get<int>("blobs.minarea");
+  blobs_maxarea = get<int>("blobs.maxarea");
+  blobs_num     = get<int>("blobs.num");
+  logInterval   = get<int>("logging.interval");
 
 
 }
@@ -46,12 +75,48 @@ void ofApp::saveSettings(string fn)
   settings.saveFile(fn);
 }
 
+// just a place to put testing code. not to be used in production.
+void ofApp::testing()
+{
+  cout << "TESTING: '" << has( "one" ) << "'" << endl;
+  cout << "TESTING: '" << has( "one.two.three" ) << "'" << endl;
+  cout << "TESTING: '" << get<string>( "one" ) << "'" << endl;
+  cout << "TESTING: '" << get<string>( "one.two.three" ) << "'" << endl;
+
+  set("one.two.three", "123");
+
+  cout << "TESTING: '" << has( "one" ) << "'" << endl;
+  cout << "TESTING: '" << has( "one.two.three" ) << "'" << endl;
+  cout << "TESTING: '" << get<string>( "one" ) << "'" << endl;
+  cout << "TESTING: '" << get<string>( "one.two.three" ) << "'" << endl;
+  cout << "TESTING: '" << get<int>( "one.two.three" ) << "'" << endl;
+
+  set("one.two.three", "1234");
+
+  cout << "TESTING: '" << has( "one" ) << "'" << endl;
+  cout << "TESTING: '" << has( "one.two.three" ) << "'" << endl;
+  cout << "TESTING: '" << get<string>( "one" ) << "'" << endl;
+  cout << "TESTING: '" << get<string>( "one.two.three" ) << "'" << endl;
+
+  set("one.two.three", "1234", false);
+
+  cout << "TESTING: '" << has( "one" ) << "'" << endl;
+  cout << "TESTING: '" << has( "one.two.three" ) << "'" << endl;
+  cout << "TESTING: '" << get<string>( "one" ) << "'" << endl;
+  cout << "TESTING: '" << get<string>( "one.two.three" ) << "'" << endl;
+
+  string tmp;
+  settings.copyXmlToString( tmp );
+  cout << "TESTING: " << tmp << endl;
+}
+
 //--------------------------------------------------------------
 void ofApp::setup(){
 
+  //testing();
+
   //ofSetLogLevel( OF_LOG_VERBOSE );
   ofSetLogLevel( OF_LOG_NOTICE  );
-
 
   
   // saved/default settings
@@ -69,11 +134,11 @@ void ofApp::setup(){
   int width,height;
   #ifdef _USE_LIVE_VIDEO
   vidSource.setVerbose(true);
-  vidSource.setDeviceID( settings.getValue("webcam_id", 0) );
-  vidSource.setup(settings.getValue("webcam_width",0),settings.getValue("webcam_height",0));
+  vidSource.setDeviceID( get<int>("webcam.id") );
+  vidSource.setup(get<int>("webcam.width"),get<int>("webcam.height"));
   // put the actual width and height back in the settings
-  settings.setValue( "webcam_width", vidSource.getWidth() );
-  settings.setValue( "webcam_height", vidSource.getHeight() );
+  set( "webcam.width", vidSource.getWidth() );
+  set( "webcam.height", vidSource.getHeight() );
   #else
   vidSource.load("input.mov");
   vidSource.play();
@@ -92,7 +157,7 @@ void ofApp::setup(){
 
 
   stringstream ss;
-  ss << settings.getValue("logfileprefix","_")<< "-";
+  ss << get<string>("logging.file.prefix")<< "-";
   ss << ofGetYear();
   ss << ofGetMonth();
   ss << ofGetDay();
@@ -337,11 +402,11 @@ void ofApp::keyPressed(int key){
 
   // we need to put updated settings into the settings object in case the user want to write
   // them to file later.
-  settings.setValue( "maxblobs",    (int)blobs_num );
-  settings.setValue( "maxblobarea", (int)blobs_maxarea );
-  settings.setValue( "minblobarea", (int)blobs_minarea );
-  settings.setValue( "threshold",   (int)threshold );
-  settings.setValue( "loginterval", (int)logInterval );
+  set( "blobs.num",    (int)blobs_num );
+  set( "blobs.maxarea", (int)blobs_maxarea );
+  set( "blobs.minarea", (int)blobs_minarea );
+  set( "blobs.threshold",   (int)threshold );
+  set( "logging.interval",  (int)logInterval );
 }
 
 //--------------------------------------------------------------
