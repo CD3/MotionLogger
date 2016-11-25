@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ofConstants.h"
 #include "ofMain.h"
 
 #include "ofxOpenCv.h"
@@ -42,6 +43,8 @@ class ofApp : public ofBaseApp{
 
     ofxCvContourFinder   contourFinder;
 
+    void saveCurrentImage();
+
     bool        bLearnBakground;
 
     size_t      totalBlobArea;
@@ -65,9 +68,9 @@ class ofApp : public ofBaseApp{
     int64_t     grabInterval;  // in milliseconds
     int64_t     logInterval;   // in milliseconds
 
-    size_t      minBlobArea;
-    size_t      maxBlobArea;
-    size_t      maxBlobs;
+    size_t      blobs_minarea;
+    size_t      blobs_maxarea;
+    size_t      blobs_num;
 
 };
 

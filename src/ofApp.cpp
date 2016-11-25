@@ -6,9 +6,9 @@ void ofApp::loadSettings(string fn)
 {
   // try to load settings from a file
   if(!settings.loadFile(fn))
-    cout << "Settings could not be loaded from file." << endl;
+    ofLog( OF_LOG_NOTICE ) << "Settings could not be loaded from file." << endl;
   else
-    cout << "Loaded settings from file." << endl;
+    ofLog( OF_LOG_NOTICE ) << "Loaded settings from file." << endl;
 
   #define SETSETTING(name,default) settings.setValue( name, settings.getValue( name, default ) );
 
@@ -25,17 +25,17 @@ void ofApp::loadSettings(string fn)
 
   string tmp;
   settings.copyXmlToString( tmp );
-  cout << "Settings:" << endl;
-  cout << tmp << endl;
+  ofLog( OF_LOG_NOTICE ) << "Settings:" << endl;
+  ofLog( OF_LOG_NOTICE ) << tmp << endl;
 
 #undef SETSETTING
 
 
   // cached settings
   threshold     = settings.getValue("threshold",0);
-  minBlobArea   = settings.getValue("minblobarea",0);
-  maxBlobArea   = settings.getValue("maxblobarea",0);
-  maxBlobs      = settings.getValue("maxblobs",0);
+  blobs_minarea   = settings.getValue("minblobarea",0);
+  blobs_maxarea   = settings.getValue("maxblobarea",0);
+  blobs_num      = settings.getValue("maxblobs",0);
   logInterval   = settings.getValue("loginterval",-1);
 
 
@@ -48,6 +48,10 @@ void ofApp::saveSettings(string fn)
 
 //--------------------------------------------------------------
 void ofApp::setup(){
+
+  //ofSetLogLevel( OF_LOG_VERBOSE );
+  ofSetLogLevel( OF_LOG_NOTICE  );
+
 
   
   // saved/default settings
@@ -140,7 +144,7 @@ void ofApp::update(){
     grayDiff.threshold(threshold);
 
     // find contours
-    contourFinder.findContours(grayDiff, minBlobArea, maxBlobArea, maxBlobs, true);  // find holes
+    contourFinder.findContours(grayDiff, blobs_minarea, blobs_maxarea, blobs_num, true);  // find holes
     totalBlobArea = 0;
     for (int i = 0; i < contourFinder.nBlobs; i++)
       totalBlobArea += contourFinder.blobs[i].area;
@@ -168,8 +172,6 @@ void ofApp::update(){
 //--------------------------------------------------------------
 void ofApp::draw(){
 
-  // draw the incoming, the grayscale, the bg and the thresholded difference
-  ofSetHexColor(0xffffff);
 
 
   int width  = 640;
@@ -178,6 +180,8 @@ void ofApp::draw(){
   int time = ofGetElapsedTimeMillis() - startTime;
   
 
+  // draw the incoming, the grayscale, the bg and the thresholded difference
+  ofSetHexColor(0xffffff);
   grayImage.draw(pad,pad,width,height);
   ofDrawBitmapString(string("grayscale image"), pad,pad );
   grayBg.draw(pad+width+pad,pad,width,height);
@@ -195,7 +199,7 @@ void ofApp::draw(){
             << "   grab interval (ms): "         << grabInterval         << endl
             << "   log interval (ms): "          << logInterval          << endl
             << "   threshold: "                  << threshold            << endl
-            << "   blob area min/max (pixels):"  << minBlobArea << "/" << maxBlobArea << endl
+            << "   blob area min/max (pixels):"  << blobs_minarea << "/" << blobs_maxarea << endl
             << "   num blobs/total blob area: "  << contourFinder.nBlobs << "/" << totalBlobArea << endl
             << "   source: " << vidSource.getWidth() << "x" << vidSource.getHeight() << " @ " << ofGetFrameRate() << " fps" << endl
             << "   output to: "
@@ -205,17 +209,19 @@ void ofApp::draw(){
   else
     reportStr << "file (" << logfn << ")" << endl;
   reportStr << "commands:" << endl
-            << "   ' ' (spacebar) to capture background image" << endl
+            << "   ' ' (spacebar) capture background image"               << endl
             << "   '+/-' increase/decrease threshold for blob detection"  << endl
             << "   './,' increase/decrease log interval by 1 ms"          << endl
             << "   '>/<' increase/decrease log interval by 1 s"           << endl
             << "   'f/c' send log data to file/console"                   << endl
+            << "   'r'   log timer to 0"                                  << endl
             << "   ']/[' increase/decrease max blob area by 1 pixel"      << endl
             << "   ''/;' increase/decrease min blob area by 1 pixel"      << endl
-            << "   '}/{' increase/decrease max blob area by 1000 pixels"   << endl
-            << "   '\"/:' increase/decrease min blob area by 1000 pixels"  << endl
-            << "   's'   save settings to a file                      "  << endl
-            << "   'd'   delete settings file                          "  << endl
+            << "   '}/{' increase/decrease max blob area by 1000 pixels"  << endl
+            << "   '\"/:' increase/decrease min blob area by 1000 pixels" << endl
+            << "   's'   save settings to a file"                         << endl
+            << "   'd'   delete settings file"                            << endl
+            << "   'i'   save image of screen"                            << endl
             ;
 
             
@@ -226,7 +232,24 @@ void ofApp::draw(){
 }
 
 //--------------------------------------------------------------
+void ofApp::saveCurrentImage()
+{
+  stringstream ss;
+  ss << settings.getValue("imagefileprefix","screenshot")<< "-";
+  ss << ofGetYear();
+  ss << ofGetMonth();
+  ss << ofGetDay();
+  ss << ofGetHours();
+  ss << ofGetMinutes();
+  ss << ".png";
+  ofImage img;
+  img.setFromPixels( colorImg.getPixels() );
+  img.save( ss.str() );
+}
+
+//--------------------------------------------------------------
 void ofApp::keyPressed(int key){
+  ofLog( OF_LOG_VERBOSE ) << "Key: " << key << endl;
 
   switch (key){
     case ' ':
@@ -263,33 +286,35 @@ void ofApp::keyPressed(int key){
       break;
 
 
+
     case '[':
-      maxBlobArea -= 1;
+      blobs_maxarea -= 1;
       break;
     case ']':
-      maxBlobArea += 1;
+      blobs_maxarea += 1;
       break;
     case '{':
-      maxBlobArea -= 1000;
+      blobs_maxarea -= 1000;
       break;
     case '}':
-      maxBlobArea += 1000;
+      blobs_maxarea += 1000;
       break;
 
 
 
     case ';':
-      minBlobArea -= 1;
+      blobs_minarea -= 1;
       break;
     case '\'':
-      minBlobArea += 1;
+      blobs_minarea += 1;
       break;
    case ':':
-      minBlobArea -= 1000;
+      blobs_minarea -= 1000;
       break;
     case '"':
-      minBlobArea += 1000;
+      blobs_minarea += 1000;
       break;
+
 
     case 's':
       saveSettings(settings_fn);
@@ -300,18 +325,21 @@ void ofApp::keyPressed(int key){
     case 'l':
       loadSettings(settings_fn);
       break;
+    case 'i':
+      saveCurrentImage();
+      break;
 
   }
 
   if (logInterval < -1) logInterval = -1;
-  if (maxBlobArea < minBlobArea) maxBlobArea = minBlobArea;
-  if (minBlobArea < 0) minBlobArea = 0;
+  if (blobs_maxarea < blobs_minarea) blobs_maxarea = blobs_minarea;
+  if (blobs_minarea < 0) blobs_minarea = 0;
 
   // we need to put updated settings into the settings object in case the user want to write
   // them to file later.
-  settings.setValue( "maxblobs",    (int)maxBlobs );
-  settings.setValue( "maxblobarea", (int)maxBlobArea );
-  settings.setValue( "minblobarea", (int)minBlobArea );
+  settings.setValue( "maxblobs",    (int)blobs_num );
+  settings.setValue( "maxblobarea", (int)blobs_maxarea );
+  settings.setValue( "minblobarea", (int)blobs_minarea );
   settings.setValue( "threshold",   (int)threshold );
   settings.setValue( "loginterval", (int)logInterval );
 }
