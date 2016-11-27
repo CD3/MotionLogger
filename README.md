@@ -22,3 +22,12 @@ This will create an executable name `MotionLogger` in the `bin/` directory. To r
     > ./bin/MotionLogger
 
 You could also double click on this file's icon.
+
+## Updating
+
+To get the latest version of this app, just do a `git pull` from the project directory. If your working
+directory is "dirty", `git` may complain. You can clean it using the `git clean` command, but this will delete all
+files that are not in the repository or ignored by git.
+
+    > git clean -f -d
+    > git pull origin
