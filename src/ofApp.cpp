@@ -11,6 +11,7 @@ void ofApp::loadSettings(string fn)
   else
     ofLog( OF_LOG_NOTICE ) << "Loaded settings from file." << endl;
 
+
   // setting migrations
   // when you want to change a setting name, just add an entry here to convert
   // the old setting name to the new setting name.
@@ -23,6 +24,7 @@ void ofApp::loadSettings(string fn)
   _migrate(savedSettings, "blobs.minarea", "minblobarea");
   _migrate(savedSettings, "blobs.maxarea", "maxblobarea");
   _migrate(savedSettings, "blobs.threshold", "threshold");
+  _migrate(savedSettings, "video.source", "webcam.id");
 
   if(migrated)
   {
@@ -42,7 +44,8 @@ void ofApp::loadSettings(string fn)
     set( name, default ); \
 
   // set defaults for any missing settings
-  SET( "webcam.id"           , (int)0               ); // the webcamera to use
+  SET( "video.source"        , (int)0               ); // the device to use for video (-1 is video file)
+  SET( "player.filename"     , (string)"input.mov"  ); // name of file to load video from
   SET( "webcam.width"        , (int)1000            ); // the webcamera resolution
   SET( "webcam.height"       , (int)1080            );
   SET( "logging.file.prefix" , (string)"data"       ); // prefix for log file
@@ -61,7 +64,8 @@ void ofApp::loadSettings(string fn)
 
 
   // cached settings
-  threshold     = get<int>("blobs.threshold");
+  currVidSource = get<int>("video.source");
+  blobs_threshold = get<int>("blobs.threshold");
   blobs_minarea = get<int>("blobs.minarea");
   blobs_maxarea = get<int>("blobs.maxarea");
   blobs_num     = get<int>("blobs.num");
@@ -78,36 +82,6 @@ void ofApp::saveSettings(string fn)
 // just a place to put testing code. not to be used in production.
 void ofApp::testing()
 {
-  cout << "TESTING: '" << has( "one" ) << "'" << endl;
-  cout << "TESTING: '" << has( "one.two.three" ) << "'" << endl;
-  cout << "TESTING: '" << get<string>( "one" ) << "'" << endl;
-  cout << "TESTING: '" << get<string>( "one.two.three" ) << "'" << endl;
-
-  set("one.two.three", "123");
-
-  cout << "TESTING: '" << has( "one" ) << "'" << endl;
-  cout << "TESTING: '" << has( "one.two.three" ) << "'" << endl;
-  cout << "TESTING: '" << get<string>( "one" ) << "'" << endl;
-  cout << "TESTING: '" << get<string>( "one.two.three" ) << "'" << endl;
-  cout << "TESTING: '" << get<int>( "one.two.three" ) << "'" << endl;
-
-  set("one.two.three", "1234");
-
-  cout << "TESTING: '" << has( "one" ) << "'" << endl;
-  cout << "TESTING: '" << has( "one.two.three" ) << "'" << endl;
-  cout << "TESTING: '" << get<string>( "one" ) << "'" << endl;
-  cout << "TESTING: '" << get<string>( "one.two.three" ) << "'" << endl;
-
-  set("one.two.three", "1234", false);
-
-  cout << "TESTING: '" << has( "one" ) << "'" << endl;
-  cout << "TESTING: '" << has( "one.two.three" ) << "'" << endl;
-  cout << "TESTING: '" << get<string>( "one" ) << "'" << endl;
-  cout << "TESTING: '" << get<string>( "one.two.three" ) << "'" << endl;
-
-  string tmp;
-  settings.copyXmlToString( tmp );
-  cout << "TESTING: " << tmp << endl;
 }
 
 //--------------------------------------------------------------
@@ -127,25 +101,18 @@ void ofApp::setup(){
   // derived settings
 
   lastLogTime   = 0;
-  grabInterval  = 0;
-  lastFrameTime = 0;
 
 
-  int width,height;
-  #ifdef _USE_LIVE_VIDEO
-  vidSource.setVerbose(true);
-  vidSource.setDeviceID( get<int>("webcam.id") );
-  vidSource.setup(get<int>("webcam.width"),get<int>("webcam.height"));
-  // put the actual width and height back in the settings
-  set( "webcam.width", vidSource.getWidth() );
-  set( "webcam.height", vidSource.getHeight() );
-  #else
-  vidSource.load("input.mov");
-  vidSource.play();
-  vidSource.setLoopState(OF_LOOP_NORMAL);
-  #endif
-  width  = vidSource.getWidth();
-  height = vidSource.getHeight();
+  if( currVidSource < 0 )
+    vidSource.reset( new videoSourceAdapter<ofVideoPlayer>() );
+  else
+    vidSource.reset( new videoSourceAdapter<ofVideoGrabber>() );
+
+  vidSource->setup( settings );
+  vidSource->start( );
+  
+  int width  = vidSource->getWidth();
+  int height = vidSource->getHeight();
 
   colorImg.allocate(width,height);
   grayImage.allocate(width,height);
@@ -180,23 +147,12 @@ void ofApp::update(){
     
   bool bNewFrame = false;
 
-  uint64_t time,stime,etime;
-  stime = etime = 0;
-  time = ofGetElapsedTimeMillis();
-  if( grabInterval > -1 && time - lastFrameTime > grabInterval )
-  {
-    stime = ofGetElapsedTimeMillis();
-    vidSource.update();
-    etime = ofGetElapsedTimeMillis();
-    time = (stime+etime)/2;
-    // use the average time at which the image was aquired.
-    bNewFrame = vidSource.isFrameNew();
-    lastFrameTime = time;
-  }
+  currFrameTime = vidSource->update();
+  bNewFrame = vidSource->isFrameNew();
 
   if (bNewFrame){
 
-    colorImg.setFromPixels(vidSource.getPixels());
+    colorImg.setFromPixels(vidSource->getPixels());
 
     grayImage = colorImg;
     if (bLearnBakground == true){
@@ -206,7 +162,7 @@ void ofApp::update(){
 
     // take the abs value of the difference between background and incoming and then threshold:
     grayDiff.absDiff(grayBg, grayImage);
-    grayDiff.threshold(threshold);
+    grayDiff.threshold(blobs_threshold);
 
     // find contours
     contourFinder.findContours(grayDiff, blobs_minarea, blobs_maxarea, blobs_num, true);  // find holes
@@ -215,9 +171,9 @@ void ofApp::update(){
       totalBlobArea += contourFinder.blobs[i].area;
 
     // log data
-    if( logInterval > -1 && time - lastLogTime > logInterval )
+    if( logInterval > -1 && currFrameTime - lastLogTime > logInterval )
     {
-      *out << time - startTime;
+      *out << currFrameTime - startTime;
       for (int i = 0; i < contourFinder.nBlobs; i++){
         *out << " "
              << contourFinder.blobs[i].boundingRect.getCenter().x
@@ -228,7 +184,7 @@ void ofApp::update(){
         totalBlobArea += contourFinder.blobs[i].area;
       }
       *out << endl;
-      lastLogTime = time;
+      lastLogTime = currFrameTime;
     }
   }
 
@@ -242,7 +198,7 @@ void ofApp::draw(){
   int width  = 640;
   int height = 360;
   int pad    = 20;
-  int time = ofGetElapsedTimeMillis() - startTime;
+  int time = currFrameTime - startTime;
   
 
   // draw the incoming, the grayscale, the bg and the thresholded difference
@@ -261,12 +217,11 @@ void ofApp::draw(){
 
   reportStr << "status:" << endl
             << "   time (ms): "                  << time                 << endl
-            << "   grab interval (ms): "         << grabInterval         << endl
             << "   log interval (ms): "          << logInterval          << endl
-            << "   threshold: "                  << threshold            << endl
+            << "   threshold: "                  << blobs_threshold      << endl
             << "   blob area min/max (pixels):"  << blobs_minarea << "/" << blobs_maxarea << endl
             << "   num blobs/total blob area: "  << contourFinder.nBlobs << "/" << totalBlobArea << endl
-            << "   source: " << vidSource.getWidth() << "x" << vidSource.getHeight() << " @ " << ofGetFrameRate() << " fps" << endl
+            << "   source: " << vidSource->getWidth() << "x" << vidSource->getHeight() << " @ " << ofGetFrameRate() << " fps" << endl
             << "   output to: "
             ;
   if( out == &cout )
@@ -321,12 +276,12 @@ void ofApp::keyPressed(int key){
       bLearnBakground = true;
       break;
     case '+':
-      if(threshold < 255)
-        threshold ++;
+      if(blobs_threshold < 255)
+        blobs_threshold ++;
       break;
     case '-':
-      if(threshold > 0)
-        threshold --;
+      if(blobs_threshold > 0)
+        blobs_threshold --;
       break;
     case '.':
       logInterval++;
@@ -405,7 +360,7 @@ void ofApp::keyPressed(int key){
   set( "blobs.num",    (int)blobs_num );
   set( "blobs.maxarea", (int)blobs_maxarea );
   set( "blobs.minarea", (int)blobs_minarea );
-  set( "blobs.threshold",   (int)threshold );
+  set( "blobs.threshold",   (int)blobs_threshold );
   set( "logging.interval",  (int)logInterval );
 }
 
