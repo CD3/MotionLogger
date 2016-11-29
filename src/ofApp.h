@@ -8,14 +8,26 @@
 
 #include "videoSource.h"
 
+inline
+float colorDistance( ofColor c, ofColor t )
+{
+  float d = 0;
+  d += pow(c.r-t.r,2);
+  d += pow(c.g-t.g,2);
+  d += pow(c.b-t.b,2);
+  return sqrt( d );
+}
 
 class ofApp : public ofBaseApp{
 
   public:
+
+    // app functions called in the main loop
     void setup();
     void update();
     void draw();
     
+    // slots for user actions
     void keyPressed(int key);
     void keyReleased(int key);
     void mouseMoved(int x, int y );
@@ -29,30 +41,46 @@ class ofApp : public ofBaseApp{
     void gotMessage(ofMessage msg);    
 
     
+    // app mode
+    enum modes { GRAYSCALE, COLOR };
+    string getModeString( modes m );
+    modes mode = GRAYSCALE;
+
+
+    // video source
     int currVidSource = 0;
     shared_ptr<videoSourceInterface> vidSource;
-    ofxCvColorImage      colorImg;
+
+    // images
+    ofxCvColorImage      rawImage;
+    ofxCvColorImage      colorMasked;
+    ofColor              targetColor;
 
     ofxCvGrayscaleImage   grayImage;
     ofxCvGrayscaleImage   grayBg;
     ofxCvGrayscaleImage   grayDiff;
 
-    ofxCvContourFinder   contourFinder;
-
     void saveCurrentImage();
-    bool bLearnBakground;
 
+    // contour finder (opencv)
+    bool bLearnBakground;
+    ofxCvContourFinder   contourFinder;
     size_t      totalBlobArea;
+
+    // logging
     ostream*    out;
     ofstream    fout;
     string      logfn;
+
+    // misc utils
+    string buildStatusString();
+
 
     // configuration
     string settings_fn;           // name of file to save/load settings
     ofxXmlSettings settings;      // xml settings object
     void loadSettings(string fn); // load settings from a file
     void saveSettings(string fn); // save settings to a file
-
 
     int  migrated = 0;
     bool _migrate( ofxXmlSettings& s, string t, string f );
@@ -62,12 +90,12 @@ class ofApp : public ofBaseApp{
     template<typename T>
     void _set( ofxXmlSettings& s, string k, T v, bool overwrite );
 
-
     bool has( string k ){return _has(settings,k);}
     template<typename T>
     T    get( string k ){return _get<T>(settings,k);}
     template<typename T>
     void set( string k, T v, bool overwrite = true ){_set(settings,k,v,overwrite);}
+
 
     // cached config vars
     size_t      webcam_width;  // width of webcam image (in pixels)
@@ -85,6 +113,20 @@ class ofApp : public ofBaseApp{
     void testing();
 };
 
+inline
+string ofApp::getModeString(modes m)
+{
+#define ADD(mode) \
+  if( m == mode)  \
+    return #mode;
+
+  ADD(GRAYSCALE);
+  ADD(COLOR);
+
+#undef ADD
+  return "UNKNOWN";
+
+}
 
 template<typename T>
 T ofApp::_get( ofxXmlSettings& s, string k )
@@ -94,7 +136,7 @@ T ofApp::_get( ofxXmlSettings& s, string k )
   T ret;
   bool missing = false;
 
-  for(int i = 0; i < N-1; i++)
+  for(size_t i = 0; i < N-1; i++)
   {
     if( !s.pushTag( keys[i] ) )
     {
@@ -121,7 +163,7 @@ void ofApp::_set( ofxXmlSettings& s, string k, T v, bool overwrite )
 
   size_t N = keys.size();
 
-  for(int i = 0; i < N-1; i++)
+  for(size_t i = 0; i < N-1; i++)
   {
     if(!s.tagExists(keys[i]))
       s.addTag(keys[i]);
@@ -143,7 +185,7 @@ bool ofApp::_has( ofxXmlSettings& s, string k )
   size_t N = keys.size();
   bool missing = false;
 
-  for(int i = 0; i < N; i++)
+  for(size_t i = 0; i < N; i++)
   {
     if( !s.pushTag( keys[i] ) )
     {

@@ -114,7 +114,7 @@ void ofApp::setup(){
   int width  = vidSource->getWidth();
   int height = vidSource->getHeight();
 
-  colorImg.allocate(width,height);
+  rawImage.allocate(width,height);
   grayImage.allocate(width,height);
   grayBg.allocate(width,height);
   grayDiff.allocate(width,height);
@@ -152,12 +152,36 @@ void ofApp::update(){
 
   if (bNewFrame){
 
-    colorImg.setFromPixels(vidSource->getPixels());
+    rawImage.setFromPixels(vidSource->getPixels());
 
-    grayImage = colorImg;
-    if (bLearnBakground == true){
-      grayBg = grayImage;    // the = sign copys the pixels from grayImage into grayBg (operator overloading)
-      bLearnBakground = false;
+    if(mode == GRAYSCALE)
+    {
+      grayImage = rawImage;
+      if (bLearnBakground == true){
+        grayBg = grayImage;    // the = sign copys the pixels from grayImage into grayBg (operator overloading)
+        bLearnBakground = false;
+      }
+    }
+
+    if(mode == COLOR)
+    {
+      ofPixels pixels = rawImage.getPixels();
+      int width = pixels.getWidth();
+      int height= pixels.getHeight();
+
+      for(int i = 0; i < width*height; i++)
+      {
+        if( colorDistance( pixels.getColor(i), ofColor(100,100,100) ) > 10 )
+        {
+          pixels[3*i] = 0;   // Red
+          pixels[3*i+1] = 0; // Green
+          pixels[3*i+2] = 0; // Blue
+        }
+      }
+
+      colorMasked.setFromPixels(pixels);
+
+      grayImage = colorMasked;
     }
 
     // take the abs value of the difference between background and incoming and then threshold:
@@ -198,24 +222,45 @@ void ofApp::draw(){
   int width  = 640;
   int height = 360;
   int pad    = 20;
-  int time = currFrameTime - startTime;
   
 
   // draw the incoming, the grayscale, the bg and the thresholded difference
   ofSetHexColor(0xffffff);
+
+
+  if(mode==GRAYSCALE)
+  {
   grayImage.draw(pad,pad,width,height);
   ofDrawBitmapString(string("grayscale image"), pad,pad );
   grayBg.draw(pad+width+pad,pad,width,height);
   ofDrawBitmapString(string("background image"), pad+width+pad,pad );
   grayDiff.draw(pad,pad+height+pad,width,height);
-  ofDrawBitmapString(string("subtracted image"), pad,pad+height+pad );
+  ofDrawBitmapString(string("detection image"), pad,pad+height+pad );
   contourFinder.draw(pad,pad+height+pad,width,height);
+  }
+  if(mode==COLOR)
+  {
+  rawImage.draw(pad,pad,width,height);
+  ofDrawBitmapString(string("raw image"), pad,pad );
+  colorMasked.draw(pad+width+pad,pad,width,height);
+  ofDrawBitmapString(string("color masked image"), pad+width+pad,pad );
+  grayDiff.draw(pad,pad+height+pad,width,height);
+  ofDrawBitmapString(string("detection image"), pad,pad+height+pad );
+  contourFinder.draw(pad,pad+height+pad,width,height);
+  }
 
   // displaye status information
   ofSetHexColor(0xffffff);
-  stringstream reportStr;
+  ofDrawBitmapString(buildStatusString(), pad+width+pad, pad+height+pad);
 
-  reportStr << "status:" << endl
+}
+
+string ofApp::buildStatusString()
+{
+  uint64_t time = currFrameTime - startTime;
+  stringstream statusStr;
+  statusStr << "mode: " << getModeString(mode) << endl;
+  statusStr << "status:" << endl
             << "   time (ms): "                  << time                 << endl
             << "   log interval (ms): "          << logInterval          << endl
             << "   threshold: "                  << blobs_threshold      << endl
@@ -225,10 +270,10 @@ void ofApp::draw(){
             << "   output to: "
             ;
   if( out == &cout )
-    reportStr << "console" << endl;
+    statusStr << "console" << endl;
   else
-    reportStr << "file (" << logfn << ")" << endl;
-  reportStr << "commands:" << endl
+    statusStr << "file (" << logfn << ")" << endl;
+  statusStr << "commands:" << endl
             << "   ' ' (spacebar) capture background image"               << endl
             << "   '+/-' increase/decrease threshold for blob detection"  << endl
             << "   './,' increase/decrease log interval by 1 ms"          << endl
@@ -244,11 +289,8 @@ void ofApp::draw(){
             << "   'i'   save image of screen"                            << endl
             ;
 
+  return statusStr.str();
             
-  ofDrawBitmapString(reportStr.str(), pad+width+pad, pad+height+pad);
-
-
-
 }
 
 //--------------------------------------------------------------
@@ -263,7 +305,7 @@ void ofApp::saveCurrentImage()
   ss << ofGetMinutes();
   ss << ".png";
   ofImage img;
-  img.setFromPixels( colorImg.getPixels() );
+  img.setFromPixels( rawImage.getPixels() );
   img.save( ss.str() );
 }
 
@@ -272,6 +314,13 @@ void ofApp::keyPressed(int key){
   ofLog( OF_LOG_VERBOSE ) << "Key: " << key << endl;
 
   switch (key){
+    case 'G':
+      mode = GRAYSCALE;
+      break;
+    case 'C':
+      mode = COLOR;
+      break;
+
     case ' ':
       bLearnBakground = true;
       break;
