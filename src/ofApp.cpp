@@ -1,6 +1,11 @@
 #include "ofApp.h"
 
 
+// just a place to put testing code. not to be used in production.
+void ofApp::testing()
+{
+}
+
 // configuration settings
 void ofApp::loadSettings(string fn)
 {
@@ -25,6 +30,10 @@ void ofApp::loadSettings(string fn)
   _migrate(savedSettings, "blobs.maxarea", "maxblobarea");
   _migrate(savedSettings, "blobs.threshold", "threshold");
   _migrate(savedSettings, "video.source", "webcam.id");
+  _migrate(savedSettings, "detection.grayscale.threshold", "blobs.threshold");
+  _migrate(savedSettings, "detection.blobs.num", "blobs.num");
+  _migrate(savedSettings, "detection.blobs.minarea", "blobs.minarea");
+  _migrate(savedSettings, "detection.blobs.maxarea", "blobs.maxarea");
 
   if(migrated)
   {
@@ -44,16 +53,20 @@ void ofApp::loadSettings(string fn)
     set( name, default ); \
 
   // set defaults for any missing settings
-  SET( "video.source"        , (int)0               ); // the device to use for video (-1 is video file)
-  SET( "player.filename"     , (string)"input.mov"  ); // name of file to load video from
-  SET( "webcam.width"        , (int)1000            ); // the webcamera resolution
-  SET( "webcam.height"       , (int)1080            );
-  SET( "logging.file.prefix" , (string)"data"       ); // prefix for log file
-  SET( "logging.interval"    , (int)-1              ); // log interval
-  SET( "blobs.num"           , (int)1               ); // maximum number of blobs to identify
-  SET( "blobs.minarea"       , (int)9               ); // min and max areas to consider for a blob
-  SET( "blobs.maxarea"       , (int)(1920*1080)/100 );
-  SET( "blobs.threshold"     , (int)50              ); // image contrast used for blob detection in gray background diff image
+  SET( "video.source",                  (int)0               ) ; // the device to use for video (-1 is video file)
+  SET( "player.filename",               (string)"input.mov"  ) ; // name of file to load video from
+  SET( "webcam.width",                  (int)1000            ) ; // the webcamera resolution
+  SET( "webcam.height",                 (int)1080            ) ;
+  SET( "logging.file.prefix",           (string)"data"       ) ; // prefix for log file
+  SET( "logging.interval",              (int)-1              ) ; // log interval
+  SET( "detection.blobs.num",                     (int)1               ) ; // maximum number of blobs to identify
+  SET( "detection.blobs.minarea",                 (int)9               ) ; // min and max areas to consider for a blob
+  SET( "detection.blobs.maxarea",                 (int)(1920*1080)/100 ) ;
+  SET( "detection.grayscale.threshold", (int)50              ) ; // image contrast used for blob detection in gray background diff image
+  SET( "detection.color.red",           (int)255             ) ;
+  SET( "detection.color.green",         (int)255             ) ;
+  SET( "detection.color.blue",          (int)255             ) ;
+  SET( "detection.color.radius",        (int)20              ) ;
 
   string tmp;
   settings.copyXmlToString( tmp );
@@ -65,43 +78,42 @@ void ofApp::loadSettings(string fn)
 
   // cached settings
   currVidSource = get<int>("video.source");
-  blobs_threshold = get<int>("blobs.threshold");
-  blobs_minarea = get<int>("blobs.minarea");
-  blobs_maxarea = get<int>("blobs.maxarea");
-  blobs_num     = get<int>("blobs.num");
+  blobs_minarea = get<int>("detection.blobs.minarea");
+  blobs_maxarea = get<int>("detection.blobs.maxarea");
+  blobs_num     = get<int>("detection.blobs.num");
   logInterval   = get<int>("logging.interval");
+
+  blobs_threshold = get<int>("detection.grayscale.threshold");
+
+  colorMask_color.r = get<int>("detection.color.red");
+  colorMask_color.g = get<int>("detection.color.green");
+  colorMask_color.b = get<int>("detection.color.blue");
+  colorMask_radius  = get<int>("detection.color.radius");
 
 
 }
 
+//--------------------------------------------------------------
 void ofApp::saveSettings(string fn)
 {
   settings.saveFile(fn);
 }
 
-// just a place to put testing code. not to be used in production.
-void ofApp::testing()
-{
-}
-
 //--------------------------------------------------------------
-void ofApp::setup(){
+void ofApp::setup()
+{
 
   //testing();
 
-  //ofSetLogLevel( OF_LOG_VERBOSE );
-  ofSetLogLevel( OF_LOG_NOTICE  );
+  ofSetLogLevel( OF_LOG_VERBOSE );
+  //ofSetLogLevel( OF_LOG_NOTICE  );
 
   
-  // saved/default settings
+  // load settings
   settings_fn = "settings.xml";
-  
   loadSettings(settings_fn);
 
-  // derived settings
-
-  lastLogTime   = 0;
-
+  // initialize video source and images
 
   if( currVidSource < 0 )
     vidSource.reset( new videoSourceAdapter<ofVideoPlayer>() );
@@ -115,14 +127,13 @@ void ofApp::setup(){
   int height = vidSource->getHeight();
 
   rawImage.allocate(width,height);
+  colorMasked.allocate(width,height);
   grayImage.allocate(width,height);
   grayBg.allocate(width,height);
-  grayDiff.allocate(width,height);
-
-  bLearnBakground = true;
+  contourImage.allocate(width,height);
 
 
-
+  // setup logging
   stringstream ss;
   ss << get<string>("logging.file.prefix")<< "-";
   ss << ofGetYear();
@@ -137,30 +148,35 @@ void ofApp::setup(){
 
   out = &cout;
 
-  startTime = 0;
-  ofBackground(100,100,100);
+  startTime   = 0;
+  lastLogTime = 0;
 
+
+  ofBackground(100,100,100); 
 }
 
 //--------------------------------------------------------------
-void ofApp::update(){
+void ofApp::update()
+{
     
   bool bNewFrame = false;
 
-  currFrameTime = vidSource->update();
+  vidSource->update();
+  currFrameTime = vidSource->getCurrentFrameTime();
   bNewFrame = vidSource->isFrameNew();
 
-  if (bNewFrame){
+  if (bNewFrame || vidSource->isPaused()){
 
     rawImage.setFromPixels(vidSource->getPixels());
 
     if(mode == GRAYSCALE)
     {
+      // the contour finder requires a gray image
       grayImage = rawImage;
-      if (bLearnBakground == true){
-        grayBg = grayImage;    // the = sign copys the pixels from grayImage into grayBg (operator overloading)
-        bLearnBakground = false;
-      }
+      // take the abs value of the difference between background
+      // and incoming and then threshold:
+      contourImage.absDiff(grayBg, grayImage);
+      contourImage.threshold(blobs_threshold);
     }
 
     if(mode == COLOR)
@@ -168,28 +184,28 @@ void ofApp::update(){
       ofPixels pixels = rawImage.getPixels();
       int width = pixels.getWidth();
       int height= pixels.getHeight();
+      ofColor c;
 
       for(int i = 0; i < width*height; i++)
       {
-        if( colorDistance( pixels.getColor(i), ofColor(100,100,100) ) > 10 )
+        c.r = pixels[3*i+0];
+        c.g = pixels[3*i+1];
+        c.b = pixels[3*i+2];
+        if( distanceToColor( c ) > colorMask_radius )
         {
-          pixels[3*i] = 0;   // Red
-          pixels[3*i+1] = 0; // Green
-          pixels[3*i+2] = 0; // Blue
+          pixels[3*i+0] = 0;
+          pixels[3*i+1] = 0;
+          pixels[3*i+2] = 0;
         }
       }
-
       colorMasked.setFromPixels(pixels);
+      contourImage = colorMasked;
+      contourImage.threshold(1);
 
-      grayImage = colorMasked;
     }
 
-    // take the abs value of the difference between background and incoming and then threshold:
-    grayDiff.absDiff(grayBg, grayImage);
-    grayDiff.threshold(blobs_threshold);
-
     // find contours
-    contourFinder.findContours(grayDiff, blobs_minarea, blobs_maxarea, blobs_num, true);  // find holes
+    contourFinder.findContours(contourImage, blobs_minarea, blobs_maxarea, blobs_num, true);  // find holes
     totalBlobArea = 0;
     for (int i = 0; i < contourFinder.nBlobs; i++)
       totalBlobArea += contourFinder.blobs[i].area;
@@ -215,43 +231,51 @@ void ofApp::update(){
 }
 
 //--------------------------------------------------------------
-void ofApp::draw(){
+void ofApp::draw()
+{
 
 
 
-  int width  = 640;
-  int height = 360;
-  int pad    = 20;
+  int width  = preview_image_width;
+  int height = preview_image_height;
+  int pad    = preview_image_pad;
   
 
   // draw the incoming, the grayscale, the bg and the thresholded difference
-  ofSetHexColor(0xffffff);
+  int bgColor = 0xffffff;
+  ofSetHexColor(bgColor);
 
 
   if(mode==GRAYSCALE)
   {
-  grayImage.draw(pad,pad,width,height);
-  ofDrawBitmapString(string("grayscale image"), pad,pad );
-  grayBg.draw(pad+width+pad,pad,width,height);
-  ofDrawBitmapString(string("background image"), pad+width+pad,pad );
-  grayDiff.draw(pad,pad+height+pad,width,height);
-  ofDrawBitmapString(string("detection image"), pad,pad+height+pad );
-  contourFinder.draw(pad,pad+height+pad,width,height);
+    grayImage.draw(pad,pad,width,height);
+    ofDrawBitmapString(string("grayscale image"), pad,pad );
+    grayBg.draw(pad+width+pad,pad,width,height);
+    ofDrawBitmapString(string("background image"), pad+width+pad,pad );
+    contourImage.draw(pad,pad+height+pad,width,height);
+    ofDrawBitmapString(string("detection image"), pad,pad+height+pad );
+    contourFinder.draw(pad,pad+height+pad,width,height);
   }
   if(mode==COLOR)
   {
-  rawImage.draw(pad,pad,width,height);
-  ofDrawBitmapString(string("raw image"), pad,pad );
-  colorMasked.draw(pad+width+pad,pad,width,height);
-  ofDrawBitmapString(string("color masked image"), pad+width+pad,pad );
-  grayDiff.draw(pad,pad+height+pad,width,height);
-  ofDrawBitmapString(string("detection image"), pad,pad+height+pad );
-  contourFinder.draw(pad,pad+height+pad,width,height);
+    rawImage.draw(pad,pad,width,height);
+    ofDrawBitmapString(string("raw image"), pad,pad );
+    colorMasked.draw(pad+width+pad,pad,width,height);
+    ofDrawBitmapString(string("color masked image"), pad+width+pad,pad );
+    contourImage.draw(pad,pad+height+pad,width,height);
+    ofDrawBitmapString(string("detection image"), pad,pad+height+pad );
+    contourFinder.draw(pad,pad+height+pad,width,height);
   }
 
   // displaye status information
   ofSetHexColor(0xffffff);
   ofDrawBitmapString(buildStatusString(), pad+width+pad, pad+height+pad);
+  if(mode==COLOR)
+  {
+  ofSetColor(colorMask_color);
+  ofDrawRectangle(pad+width+pad+width-50,pad+height+pad,50,50);
+  ofSetHexColor(bgColor);
+  }
 
 }
 
@@ -259,38 +283,65 @@ string ofApp::buildStatusString()
 {
   uint64_t time = currFrameTime - startTime;
   stringstream statusStr;
-  statusStr << "mode: " << getModeString(mode) << endl;
-  statusStr << "status:" << endl
-            << "   time (ms): "                  << time                 << endl
-            << "   log interval (ms): "          << logInterval          << endl
-            << "   threshold: "                  << blobs_threshold      << endl
-            << "   blob area min/max (pixels):"  << blobs_minarea << "/" << blobs_maxarea << endl
-            << "   num blobs/total blob area: "  << contourFinder.nBlobs << "/" << totalBlobArea << endl
-            << "   source: " << vidSource->getWidth() << "x" << vidSource->getHeight() << " @ " << ofGetFrameRate() << " fps" << endl
-            << "   output to: "
-            ;
+  statusStr << "mode: " << getModeString() << endl;
+  statusStr << "status:" << endl;
+  statusStr << "   time (ms): "                  << time                   << endl;
+  statusStr << "   log interval (ms): "          << logInterval            << endl;
+  if( mode == GRAYSCALE )
+  statusStr << "   threshold: "                  << blobs_threshold        << endl;
+  if( mode == COLOR     )
+  statusStr << "   color mask (red): "           << (int)colorMask_color.r << endl;
+  if( mode == COLOR     )
+  statusStr << "   color mask (green): "         << (int)colorMask_color.g << endl;
+  if( mode == COLOR     )
+  statusStr << "   color mask (blue): "          << (int)colorMask_color.b << endl;
+  if( mode == COLOR     )
+  statusStr << "   color mask radius: "          << colorMask_radius       << endl;
+  statusStr << "   blob area min/max (pixels):"  << blobs_minarea << "/"   << blobs_maxarea << endl;
+  statusStr << "   num blobs/total blob area: "  << contourFinder.nBlobs   << "/" << totalBlobArea << endl;
+  statusStr << "   source: " << vidSource->getWidth() << "x" << vidSource->getHeight() << " @ " << ofGetFrameRate() << " fps" << endl;
+  statusStr << "   output to: ";
   if( out == &cout )
     statusStr << "console" << endl;
   else
     statusStr << "file (" << logfn << ")" << endl;
-  statusStr << "commands:" << endl
-            << "   ' ' (spacebar) capture background image"               << endl
-            << "   '+/-' increase/decrease threshold for blob detection"  << endl
-            << "   './,' increase/decrease log interval by 1 ms"          << endl
-            << "   '>/<' increase/decrease log interval by 1 s"           << endl
-            << "   'f/c' send log data to file/console"                   << endl
-            << "   'r'   log timer to 0"                                  << endl
-            << "   ']/[' increase/decrease max blob area by 1 pixel"      << endl
-            << "   ''/;' increase/decrease min blob area by 1 pixel"      << endl
-            << "   '}/{' increase/decrease max blob area by 1000 pixels"  << endl
-            << "   '\"/:' increase/decrease min blob area by 1000 pixels" << endl
-            << "   's'   save settings to a file"                         << endl
-            << "   'd'   delete settings file"                            << endl
-            << "   'i'   save image of screen"                            << endl
+  statusStr << "commands:"                                                << endl;
+  statusStr << "   ' '   capture background image"                        << endl;
+  if( mode == GRAYSCALE )
+  statusStr << "   '+/-' increase/decrease threshold for blob detection"  << endl;
+  if( mode == COLOR     )
+  statusStr << "   'r/R' increase/decrease color mask red component"      << endl;
+  if( mode == COLOR     )
+  statusStr << "   'g/G' increase/decrease color mask green component"    << endl;
+  if( mode == COLOR     )
+  statusStr << "   'b/B' increase/decrease color mask blue component"     << endl;
+  if( mode == COLOR     )
+  statusStr << "   '+/-' increase/decrease color mask radius"             << endl;
+  statusStr << "   './,' increase/decrease log interval by 1 ms"          << endl;
+  statusStr << "   '>/<' increase/decrease log interval by 1 s"           << endl;
+  statusStr << "   'f/c' send log data to file/console"                   << endl;
+  statusStr << "   't'   set log timer back to 0"                         << endl;
+  statusStr << "   ']/[' increase/decrease max blob area by 1 pixel"      << endl;
+  statusStr << "   ''/;' increase/decrease min blob area by 1 pixel"      << endl;
+  statusStr << "   '}/{' increase/decrease max blob area by 1000 pixels"  << endl;
+  statusStr << "   '\"/:' increase/decrease min blob area by 1000 pixels" << endl;
+  statusStr << "   'p'   pause/play video"                                << endl;
+  statusStr << "   's'   save settings to a file"                         << endl;
+  statusStr << "   'd'   delete settings file"                            << endl;
+  statusStr << "   'i'   save image of screen"                            << endl;
             ;
 
   return statusStr.str();
             
+}
+
+float ofApp::distanceToColor( ofColor c )
+{
+  float d = 0;
+  d += pow(c.r-colorMask_color.r,2);
+  d += pow(c.g-colorMask_color.g,2);
+  d += pow(c.b-colorMask_color.b,2);
+  return sqrt( d );
 }
 
 //--------------------------------------------------------------
@@ -310,28 +361,19 @@ void ofApp::saveCurrentImage()
 }
 
 //--------------------------------------------------------------
-void ofApp::keyPressed(int key){
+void ofApp::keyPressed(int key)
+{
   ofLog( OF_LOG_VERBOSE ) << "Key: " << key << endl;
 
+  // COMMON COMMANDS
   switch (key){
-    case 'G':
+    case '1':
       mode = GRAYSCALE;
       break;
-    case 'C':
+    case '2':
       mode = COLOR;
       break;
 
-    case ' ':
-      bLearnBakground = true;
-      break;
-    case '+':
-      if(blobs_threshold < 255)
-        blobs_threshold ++;
-      break;
-    case '-':
-      if(blobs_threshold > 0)
-        blobs_threshold --;
-      break;
     case '.':
       logInterval++;
       break;
@@ -350,10 +392,9 @@ void ofApp::keyPressed(int key){
     case 'c':
       out = &cout;
       break;
-    case 'r':
+    case 't':
       startTime = ofGetElapsedTimeMillis();
       break;
-
 
 
     case '[':
@@ -368,7 +409,6 @@ void ofApp::keyPressed(int key){
     case '}':
       blobs_maxarea += 1000;
       break;
-
 
 
     case ';':
@@ -398,7 +438,64 @@ void ofApp::keyPressed(int key){
       saveCurrentImage();
       break;
 
+    case 'p':
+      if(vidSource->isPaused())
+        vidSource->start();
+      else
+        vidSource->stop();
+      break;
+
   }
+
+  if( mode == GRAYSCALE)
+  {
+    switch (key){
+      case ' ':
+        grayBg = grayImage;
+        break;
+      case '+':
+        if(blobs_threshold < 255)
+          blobs_threshold ++;
+        break;
+      case '-':
+        if(blobs_threshold > 0)
+          blobs_threshold --;
+        break;
+    }
+  }
+
+  if( mode == COLOR )
+  {
+    switch (key){
+      case 'r':
+        colorMask_color.r -= 1;
+        break;
+      case 'R':
+        colorMask_color.r += 1;
+        break;
+      case 'g':
+        colorMask_color.g -= 1;
+        break;
+      case 'G':
+        colorMask_color.g += 1;
+        break;
+      case 'b':
+        colorMask_color.b -= 1;
+        break;
+      case 'B':
+        colorMask_color.b += 1;
+        break;
+      case '+':
+        colorMask_radius++;
+        break;
+      case '-':
+        colorMask_radius--;
+        break;
+    }
+  }
+
+
+
 
   if (logInterval < -1) logInterval = -1;
   if (blobs_maxarea < blobs_minarea) blobs_maxarea = blobs_minarea;
@@ -406,59 +503,97 @@ void ofApp::keyPressed(int key){
 
   // we need to put updated settings into the settings object in case the user want to write
   // them to file later.
-  set( "blobs.num",    (int)blobs_num );
-  set( "blobs.maxarea", (int)blobs_maxarea );
-  set( "blobs.minarea", (int)blobs_minarea );
-  set( "blobs.threshold",   (int)blobs_threshold );
-  set( "logging.interval",  (int)logInterval );
+  set( "logging.interval",              (int)logInterval );
+  set( "detection.blobs.num",           (int)blobs_num );
+  set( "detection.blobs.maxarea",       (int)blobs_maxarea );
+  set( "detection.blobs.minarea",       (int)blobs_minarea );
+  set( "detection.grayscale.threshold", (int)blobs_threshold );
+  set( "detection.color.radius",        (int)colorMask_radius );
 }
 
 //--------------------------------------------------------------
-void ofApp::keyReleased(int key){
-
-}
-
-//--------------------------------------------------------------
-void ofApp::mouseMoved(int x, int y ){
-
-}
-
-//--------------------------------------------------------------
-void ofApp::mouseDragged(int x, int y, int button){
+void ofApp::keyReleased(int key)
+{
 
 }
 
 //--------------------------------------------------------------
-void ofApp::mousePressed(int x, int y, int button){
+void ofApp::mouseMoved(int x, int y )
+{
 
 }
 
 //--------------------------------------------------------------
-void ofApp::mouseReleased(int x, int y, int button){
+void ofApp::mouseDragged(int x, int y, int button)
+{
 
 }
 
 //--------------------------------------------------------------
-void ofApp::mouseEntered(int x, int y){
+void ofApp::mousePressed(int x, int y, int button)
+{
+
+  if(mode == COLOR)
+  {
+    if( x > preview_image_pad
+    &&  x < (preview_image_pad + preview_image_width)
+    &&  y > preview_image_pad
+    &&  y < (preview_image_pad + preview_image_height) )
+    {
+      // user clicked inside of the color image
+      int W = rawImage.getWidth();
+      int H = rawImage.getHeight();
+      int xx = ofMap( x-preview_image_pad, 0, preview_image_width , 0, W );
+      int yy = ofMap( y-preview_image_pad, 0, preview_image_height, 0, H );
+      int ii = yy*W + xx;
+
+      ofLog(OF_LOG_VERBOSE) << "getting color at : "<<xx<<","<<yy<<" (" << ii << ")...";
+      colorMask_color.r = rawImage.getPixels()[3*ii+0];
+      colorMask_color.g = rawImage.getPixels()[3*ii+1];
+      colorMask_color.b = rawImage.getPixels()[3*ii+2];
+      ofLog(OF_LOG_VERBOSE) << "done." << endl;
+
+      set( "detection.color.red",   colorMask_color.r);
+      set( "detection.color.green", colorMask_color.g);
+      set( "detection.color.blue",  colorMask_color.b);
+    }
+
+  }
 
 }
 
 //--------------------------------------------------------------
-void ofApp::mouseExited(int x, int y){
+void ofApp::mouseReleased(int x, int y, int button)
+{
 
 }
 
 //--------------------------------------------------------------
-void ofApp::windowResized(int w, int h){
+void ofApp::mouseEntered(int x, int y)
+{
 
 }
 
 //--------------------------------------------------------------
-void ofApp::gotMessage(ofMessage msg){
+void ofApp::mouseExited(int x, int y)
+{
 
 }
 
 //--------------------------------------------------------------
-void ofApp::dragEvent(ofDragInfo dragInfo){ 
+void ofApp::windowResized(int w, int h)
+{
+
+}
+
+//--------------------------------------------------------------
+void ofApp::gotMessage(ofMessage msg)
+{
+
+}
+
+//--------------------------------------------------------------
+void ofApp::dragEvent(ofDragInfo dragInfo)
+{ 
 
 }

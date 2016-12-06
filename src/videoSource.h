@@ -11,9 +11,11 @@ class videoSourceInterface
     virtual void close( ) = 0;
 
     virtual void start() = 0;
-    virtual uint64_t update() = 0;
+    virtual void update() = 0;
     virtual void stop() = 0;
+    virtual bool isPaused() = 0;
 
+    virtual uint64_t getCurrentFrameTime() = 0;
     virtual int getWidth() = 0;
     virtual int getHeight() = 0;
     virtual ofPixels& getPixels() = 0;
@@ -25,6 +27,8 @@ class videoSourceAdapter : public videoSourceInterface
 {
   private:
     T t;
+    bool paused;
+    uint64_t currentFrameTime;
 
   public:
     videoSourceAdapter(){}
@@ -33,13 +37,15 @@ class videoSourceAdapter : public videoSourceInterface
     void close( ){};
 
     void start()          {}
-    uint64_t update()     { t.update(); return 0;}
+    void update()         {t.update();}
     void stop()           {}
+    bool isPaused()       {return t.isPaused();}
 
     int getWidth()        {return t.getWidth();}
     int getHeight()       {return t.getHeight();}
     ofPixels& getPixels() {return t.getPixels();}
     bool isFrameNew()     {return t.isFrameNew();}
+    uint64_t getCurrentFrameTime() {return currentFrameTime;}
 };
 
 template<>
@@ -54,21 +60,44 @@ void videoSourceAdapter<ofVideoGrabber>::setup( ofxXmlSettings &s )
   s.setValue( "width",  t.getWidth() );
   s.setValue( "height", t.getHeight() );
   s.popTag();
+  paused = false;
 }
 
 template<>
 inline
-uint64_t videoSourceAdapter<ofVideoGrabber>::update( )
+void videoSourceAdapter<ofVideoGrabber>::start( )
 {
-  uint64_t time,stime,etime;
+  paused = false;
+}
+
+template<>
+inline
+void videoSourceAdapter<ofVideoGrabber>::stop( )
+{
+  paused = true;
+}
+
+template<>
+inline
+bool videoSourceAdapter<ofVideoGrabber>::isPaused( )
+{
+  return paused;
+}
+
+template<>
+inline
+void videoSourceAdapter<ofVideoGrabber>::update( )
+{
+  if(paused)
+    return;
+
+  uint64_t stime,etime;
   stime = etime = 0;
   stime = ofGetElapsedTimeMillis();
   t.update();
   etime = ofGetElapsedTimeMillis();
   // use the average time at which the image was aquired.
-  time = (stime+etime)/2;
-
-  return time;
+  currentFrameTime = (stime+etime)/2;
 }
 
 
@@ -106,10 +135,10 @@ void videoSourceAdapter<ofVideoPlayer>::start( )
 
 template<>
 inline
-uint64_t videoSourceAdapter<ofVideoPlayer>::update( )
+void videoSourceAdapter<ofVideoPlayer>::update( )
 {
   t.update();
 
-  return t.getCurrentFrame()*t.getDuration()*1000/t.getTotalNumFrames();
+  currentFrameTime = t.getCurrentFrame()*t.getDuration()*1000/t.getTotalNumFrames();
 }
 

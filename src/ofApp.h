@@ -8,17 +8,9 @@
 
 #include "videoSource.h"
 
-inline
-float colorDistance( ofColor c, ofColor t )
-{
-  float d = 0;
-  d += pow(c.r-t.r,2);
-  d += pow(c.g-t.g,2);
-  d += pow(c.b-t.b,2);
-  return sqrt( d );
-}
 
-class ofApp : public ofBaseApp{
+class ofApp : public ofBaseApp
+{
 
   public:
 
@@ -43,7 +35,7 @@ class ofApp : public ofBaseApp{
     
     // app mode
     enum modes { GRAYSCALE, COLOR };
-    string getModeString( modes m );
+    string getModeString( );
     modes mode = GRAYSCALE;
 
 
@@ -52,20 +44,19 @@ class ofApp : public ofBaseApp{
     shared_ptr<videoSourceInterface> vidSource;
 
     // images
-    ofxCvColorImage      rawImage;
-    ofxCvColorImage      colorMasked;
-    ofColor              targetColor;
+    ofxCvColorImage  rawImage;
+    ofxCvColorImage  colorMasked;
 
     ofxCvGrayscaleImage   grayImage;
     ofxCvGrayscaleImage   grayBg;
-    ofxCvGrayscaleImage   grayDiff;
+    ofxCvGrayscaleImage   contourImage;
 
     void saveCurrentImage();
 
-    // contour finder (opencv)
-    bool bLearnBakground;
+    // object detection stuff (opencv)
     ofxCvContourFinder   contourFinder;
-    size_t      totalBlobArea;
+    size_t  totalBlobArea;
+    float distanceToColor( ofColor c );
 
     // logging
     ostream*    out;
@@ -110,15 +101,25 @@ class ofApp : public ofBaseApp{
     size_t      blobs_maxarea;
     size_t      blobs_num;
 
+    int preview_image_width = 640;
+    int preview_image_height = 360;
+    int preview_image_pad = 20;
+
+    float colorMask_radius;
+    ofColor colorMask_color;;
+
+    // flags
+
+    // testing
     void testing();
 };
 
 inline
-string ofApp::getModeString(modes m)
+string ofApp::getModeString()
 {
-#define ADD(mode) \
+#define ADD(m) \
   if( m == mode)  \
-    return #mode;
+    return #m;
 
   ADD(GRAYSCALE);
   ADD(COLOR);
